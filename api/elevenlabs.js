@@ -1,46 +1,32 @@
 export default async function handler(req, res) {
-  // Step 1: Get transcript from ElevenLabs
-  const transcript = req.body.transcript || "";
+  // 1) Allow browser GET checks without crashing
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      message: "This endpoint expects POST with JSON. Example: { transcript: '...', timing: {...}, metrics: {...}, scenario: {...} }"
+    });
+  }
 
-  // Step 2: Run Scoring Engine
-  const scoringResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1",
-      messages: [
-        { role: "system", content: "SCORING ENGINE SYSTEM PROMPT GOES HERE" },
-        { role: "user", content: transcript }
-      ]
-    })
-  });
+  // 2) Only accept POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method Not Allowed. Use POST." });
+  }
 
-  const scoring = await scoringResponse.json();
+  // 3) Safely read JSON body
+  const body = req.body || {};
+  const transcript = body.transcript;
 
-  // Step 3: Run Feedback Engine
-  const feedbackResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1",
-      messages: [
-        { role: "system", content: "FEEDBACK ENGINE SYSTEM PROMPT GOES HERE" },
-        { role: "user", content: JSON.stringify(scoring) }
-      ]
-    })
-  });
+  if (!transcript || typeof transcript !== "string") {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing transcript. Send JSON like: { transcript: 'USER: ...\\nAGENT: ...' }"
+    });
+  }
 
-  const feedback = await feedbackResponse.json();
-
-  // Step 4: Send results back
-  res.status(200).json({
-    scoring,
-    feedback
+  // 4) Temporary: just echo back what we received (proves pipeline works)
+  // We'll add scoring + feedback after this passes.
+  return res.status(200).json({
+    ok: true,
+    receivedChars: transcript.length
   });
 }
